@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 type MessageRole = 'user' | 'assistant' | 'tool';
 
@@ -14,11 +14,18 @@ type Message = {
   };
 };
 
+const assistantName = 'Playwright MCP';
+
+const inputPlaceholder =
+  'Ask the MCP server to explore, capture snapshots, or execute deterministic browser actions…';
+
+const docsFallbackUrl = 'https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot';
+
 const seedMessages: Message[] = [
   {
     id: '1',
     role: 'assistant',
-    name: 'Playwright MCP',
+    name: assistantName,
     content:
       "Hello! I can drive Playwright to collect structured accessibility snapshots so you don't have to parse screenshots. What workflow should we run today?"
   },
@@ -31,32 +38,84 @@ const seedMessages: Message[] = [
   {
     id: '3',
     role: 'assistant',
-    name: 'Playwright MCP',
+    name: assistantName,
     content: 'Running Playwright navigation…',
     toolCall: {
       name: 'playwright.navigate',
-      args: { url: 'https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot' },
+      args: { url: docsFallbackUrl },
       result: 'Visited documentation page and captured accessibility tree.'
     }
   },
   {
     id: '4',
     role: 'assistant',
-    name: 'Playwright MCP',
+    name: assistantName,
     content:
       'The docs recommend rendering the <Chat /> component, wiring a message array, and streaming responses through the AI SDK UI channel APIs.'
   }
 ];
 
+const createSimulatedAssistantMessages = (prompt: string): Message[] => {
+  const timestamp = Date.now();
+  const normalizedPrompt = prompt.toLowerCase();
+  const summaryRequested =
+    normalizedPrompt.includes('summary') ||
+    normalizedPrompt.includes('summarise') ||
+    normalizedPrompt.includes('summarize');
+
+  if (normalizedPrompt.includes('navigate') || normalizedPrompt.includes('open')) {
+    const urlMatch = prompt.match(/https?:\/\/\S+/);
+    const destinationUrl = urlMatch?.at(0) ?? docsFallbackUrl;
+
+    return [
+      {
+        id: `${timestamp}-assistant-tool`,
+        role: 'assistant',
+        name: assistantName,
+        content: 'Running Playwright navigation…',
+        toolCall: {
+          name: 'playwright.navigate',
+          args: { url: destinationUrl },
+          result: `Visited ${destinationUrl} and captured accessibility metadata.`
+        }
+      },
+      {
+        id: `${timestamp}-assistant-summary`,
+        role: 'assistant',
+        name: assistantName,
+        content: summaryRequested
+          ? `Here is a concise summary of the integration steps described at ${destinationUrl}: render the <Chat /> component, maintain a persistent message array, and stream assistant responses from your MCP server to keep the UI in sync.`
+          : `Navigation to ${destinationUrl} completed. Connect your MCP server stream to relay the full integration guidance back to this panel.`
+      }
+    ];
+  }
+
+  if (normalizedPrompt.includes('accessibility') || normalizedPrompt.includes('snapshot')) {
+    return [
+      {
+        id: `${timestamp}-assistant-accessibility`,
+        role: 'assistant',
+        name: assistantName,
+        content:
+          'To capture accessibility snapshots with Playwright, use page.accessibility.snapshot(), persist the JSON result, and attach it to your MCP message stream so the client can inspect the semantic tree without parsing images.'
+      }
+    ];
+  }
+
+  return [
+    {
+      id: `${timestamp}-assistant`,
+      role: 'assistant',
+      name: assistantName,
+      content:
+        'This demo response is simulated. Connect the UI to your MCP server to execute the request and stream back real Playwright updates.'
+    }
+  ];
+};
+
 export function Chatbot() {
   const [messages, setMessages] = useState(seedMessages);
   const [input, setInput] = useState('');
-
-  const placeholder = useMemo(
-    () =>
-      'Ask the MCP server to explore, capture snapshots, or execute deterministic browser actions…',
-    []
-  );
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,15 +130,9 @@ export function Chatbot() {
       content: input.trim()
     };
 
-    const assistantMessage: Message = {
-      id: `${Date.now()}-assistant`,
-      role: 'assistant',
-      name: 'Playwright MCP',
-      content:
-        'This demo response is simulated. Hook this UI to your MCP server stream to make it conversational!'
-    };
+    const assistantMessages = createSimulatedAssistantMessages(userMessage.content);
 
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    setMessages((prev) => [...prev, userMessage, ...assistantMessages]);
     setInput('');
   }
 
@@ -105,7 +158,7 @@ export function Chatbot() {
         <textarea
           aria-label="Chat message"
           value={input}
-          placeholder={placeholder}
+          placeholder={inputPlaceholder}
           onChange={(event) => setInput(event.target.value)}
         />
         <button type="submit">Send</button>
