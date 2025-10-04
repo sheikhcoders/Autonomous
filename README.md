@@ -1,8 +1,16 @@
-# Playwright MCP Chatbot Demo
+# Vercel AI Elements Chatbot Starter
 
-This project demonstrates how a Model Context Protocol (MCP) server powered by Playwright can pair
-with an AI SDK UI chatbot interface. The UI showcases a cards-based documentation navigator and a
-chat panel that simulates deterministic tool usage with Playwright.
+This project provides a fully featured, hackable Next.js chatbot experience inspired by the Vercel AI
+Elements component system. It ships with a multi-conversation workspace, persona-aware system prompts,
+and a reusable chat state manager so you can plug in your preferred inference stack immediately.
+
+## Features
+
+- ✅ **Next.js App Router** with TypeScript and streaming-ready API routes
+- ✅ **Conversation workspace** including renaming, deletion, and automatic persistence
+- ✅ **Persona and model toolbar** modelled after Vercel AI Elements
+- ✅ **System prompt editor** for rapid experimentation
+- ✅ **Client-side chat manager hook** for wiring any AI backend
 
 ## Getting started
 
@@ -11,34 +19,49 @@ npm install
 npm run dev
 ```
 
-The development server runs on [http://localhost:5173](http://localhost:5173).
-
-## Available scripts
-
-- `npm run dev` – start the Vite development server
-- `npm run build` – type-check and create a production build
-- `npm run preview` – preview the built app locally
+The development server runs on [http://localhost:3000](http://localhost:3000).
 
 ## Project structure
 
 ```
 .
-├── index.html
+├── app
+│   ├── api
+│   │   └── chat
+│   │       └── route.ts
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── components
+│   └── chat
+│       ├── ChatApp.tsx
+│       ├── ConversationList.tsx
+│       ├── MessageComposer.tsx
+│       ├── MessageList.tsx
+│       └── SystemToolbar.tsx
+├── lib
+│   └── chat
+│       ├── types.ts
+│       └── useChatManager.ts
+├── next-env.d.ts
+├── next.config.mjs
 ├── package.json
-├── src
-│   ├── App.tsx
-│   ├── components
-│   │   ├── Chatbot.tsx
-│   │   └── IndexCards.tsx
-│   ├── main.tsx
-│   └── styles.css
 ├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
+└── README.md
 ```
 
-## Next steps
+## API contract
 
-Replace the simulated assistant responses inside `Chatbot.tsx` with live streaming data from your MCP
-server. The UI is intentionally framework-agnostic so it can connect to any backend that emits AI SDK
-UI-compatible message streams.
+The `/api/chat` route expects the same schema used by Vercel AI Elements: an array of `{ id, role, content }
+messages along with persona and temperature metadata. It returns a single assistant message by default, but
+is structured so you can replace the mocked implementation with your own streaming handler.
+
+## Customisation roadmap
+
+- Swap the mock implementation in `app/api/chat/route.ts` with your preferred inference provider.
+- Extend the `useChatManager` hook to call vector search, tool executors, or evaluation harnesses.
+- Replace the CSS tokens in `app/globals.css` with Tailwind or your design system of choice.
+
+## License
+
+MIT
