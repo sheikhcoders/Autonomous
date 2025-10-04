@@ -18,33 +18,33 @@ const seedMessages: Message[] = [
   {
     id: '1',
     role: 'assistant',
-    name: 'Playwright MCP',
+    name: 'AI Elements Copilot',
     content:
-      "Hello! I can drive Playwright to collect structured accessibility snapshots so you don't have to parse screenshots. What workflow should we run today?"
+      'Hey! Need help scaffolding AI-native interfaces? I can walk you through the AI Elements registry and wire components into your app.'
   },
   {
     id: '2',
     role: 'user',
     name: 'You',
-    content: 'Navigate to the AI SDK UI chatbot docs and summarise the integration steps.'
+    content: 'I want a conversation layout with inline citations and a task timeline. Where should I start?'
   },
   {
     id: '3',
     role: 'assistant',
-    name: 'Playwright MCP',
-    content: 'Running Playwright navigation…',
+    name: 'AI Elements Copilot',
+    content: 'Inspecting component registry…',
     toolCall: {
-      name: 'playwright.navigate',
-      args: { url: 'https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot' },
-      result: 'Visited documentation page and captured accessibility tree.'
+      name: 'ai-elements.lookup',
+      args: { components: ['conversation', 'inline-citation', 'task'] },
+      result: 'Found conversation, inline-citation, and task components with live previews.'
     }
   },
   {
     id: '4',
     role: 'assistant',
-    name: 'Playwright MCP',
+    name: 'AI Elements Copilot',
     content:
-      'The docs recommend rendering the <Chat /> component, wiring a message array, and streaming responses through the AI SDK UI channel APIs.'
+      'Start by rendering <Conversation /> with your message stream, wrap insights with <InlineCitation />, and visualise progress via the <Task /> timeline.'
   }
 ];
 
@@ -54,7 +54,7 @@ export function Chatbot() {
 
   const placeholder = useMemo(
     () =>
-      'Ask the MCP server to explore, capture snapshots, or execute deterministic browser actions…',
+      'Ask the copilot to assemble UI flows, suggest components, or orchestrate AI tool calls…',
     []
   );
 
@@ -74,9 +74,9 @@ export function Chatbot() {
     const assistantMessage: Message = {
       id: `${Date.now()}-assistant`,
       role: 'assistant',
-      name: 'Playwright MCP',
+      name: 'AI Elements Copilot',
       content:
-        'This demo response is simulated. Hook this UI to your MCP server stream to make it conversational!'
+        'Great choice! Connect your data source to <Conversation /> and progressively hydrate messages as your model streams updates.'
     };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
@@ -86,11 +86,12 @@ export function Chatbot() {
   return (
     <div className="chat-panel">
       <header className="chat-header">
-        <div className="avatar avatar-assistant">M</div>
+        <div className="avatar avatar-assistant">A</div>
         <div>
-          <div className="chat-title">Model Context Protocol Chat</div>
+          <div className="chat-title">AI Elements Copilot</div>
           <p className="chat-description">
-            Showcase of an AI SDK UI chatbot panel wired for deterministic tool usage with Playwright.
+            Follow along as the copilot assembles components, previews tool outputs, and keeps specs in sync
+            with the AI Elements registry.
           </p>
         </div>
       </header>
