@@ -14,6 +14,9 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
+      if (isSending) {
+        return;
+      }
       const trimmed = value.trim();
       if (!trimmed) {
         return;
@@ -21,7 +24,7 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
       onSubmit(trimmed);
       setValue("");
     },
-    [onSubmit, value]
+    [isSending, onSubmit, value]
   );
 
   return (
@@ -38,6 +41,9 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
+              if (isSending) {
+                return;
+              }
               const trimmed = value.trim();
               if (trimmed) {
                 onSubmit(trimmed);
@@ -49,6 +55,11 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
         <button type="submit" disabled={isSending}>
           {isSending ? "Sending" : "Send"}
         </button>
+        {isSending ? (
+          <p className="chat-status" aria-live="polite">
+            Assistant is still responding...
+          </p>
+        ) : null}
       </form>
     </div>
   );

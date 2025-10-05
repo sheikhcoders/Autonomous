@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest",
     "groq:stream": "tsx scripts/groq-stream.ts"
   },
   "dependencies": {
@@ -20,8 +21,11 @@
     "@types/node": "^20.12.7",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
+    "@testing-library/react": "^14.2.1",
+    "jsdom": "^24.0.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.5",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   }
 }
