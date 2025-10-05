@@ -31,7 +31,7 @@ const STORAGE_KEY = "ai-elements-chatbot";
 const DEFAULT_SETTINGS: ChatSettings = {
   persona: "full-stack",
   temperature: 0.6,
-  model: "gpt-4o-mini"
+  model: "llama-3.3-70b-versatile"
 };
 
 interface UseChatManagerResult {
@@ -220,11 +220,15 @@ export function useChatManager(): UseChatManagerResult {
           })
         });
 
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
+        const payload = (await response.json().catch(() => null)) as
+          | { message?: ChatMessage; error?: string }
+          | null;
+
+        if (!response.ok || !payload?.message) {
+          const errorMessage = payload?.error || `Request failed with status ${response.status}`;
+          throw new Error(errorMessage);
         }
 
-        const payload = (await response.json()) as { message: ChatMessage };
         const assistantMessage = payload.message;
 
         const mergedMessages = nextMessages.map((message): ChatMessage => {
@@ -240,12 +244,14 @@ export function useChatManager(): UseChatManagerResult {
         pushMessages(conversationId, mergedMessages);
       } catch (error) {
         console.error("Chat request failed", error);
+        const failureReason =
+          error instanceof Error ? error.message : "Request failed. Try again.";
         const erroredMessages = nextMessages.map((message): ChatMessage => {
           if (message.id === assistantPlaceholder.id) {
             const errorMessage: ChatMessage = {
               ...message,
               status: "error",
-              content: "Request failed. Try again."
+              content: failureReason
             };
             return errorMessage;
           }
@@ -295,11 +301,15 @@ export function useChatManager(): UseChatManagerResult {
           })
         });
 
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
+        const payload = (await response.json().catch(() => null)) as
+          | { message?: ChatMessage; error?: string }
+          | null;
+
+        if (!response.ok || !payload?.message) {
+          const errorMessage = payload?.error || `Request failed with status ${response.status}`;
+          throw new Error(errorMessage);
         }
 
-        const payload = (await response.json()) as { message: ChatMessage };
         const assistantMessage = payload.message;
 
         const mergedMessages = nextMessages.map((message): ChatMessage => {
@@ -315,12 +325,14 @@ export function useChatManager(): UseChatManagerResult {
         pushMessages(conversationId, mergedMessages);
       } catch (error) {
         console.error("Failed to regenerate message", error);
+        const failureReason =
+          error instanceof Error ? error.message : "Regeneration failed. Try again.";
         const erroredMessages = nextMessages.map((message): ChatMessage => {
           if (message.id === updatedPlaceholder.id) {
             const errorMessage: ChatMessage = {
               ...message,
               status: "error",
-              content: "Regeneration failed. Try again."
+              content: failureReason
             };
             return errorMessage;
           }
