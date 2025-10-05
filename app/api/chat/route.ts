@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+nse } from "next/server";
 import Groq from "groq-sdk";
 import type { ChatMessage } from "@/lib/chat/types";
 
@@ -11,92 +11,187 @@ const personas: Record<string, string> = {
     "You are an AI researcher who summarises findings, compares techniques, and is explicit about assumptions."
 };
 
-const MODEL_MAP: Record<string, string> = {
-  "llama-3.3-70b-versatile": "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile": "llama-3.1-70b-versatile",
-  "llama-guard-3-8b": "llama-guard-3-8b"
-};
-
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
-
-const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
-
-interface ChatRequestBody {
-  messages?: ChatMessage[];
-  persona?: string;
-  temperature?: number;
-  systemPrompt?: string;
-  model?: string;
-}
+const DEFAULT_MODEL = "deepseek-r1-distill-llama-70b";
 
 export async function POST(req: NextRequest) {
-  if (!groq) {
-    return NextResponse.json(
-      { error: "GROQ_API_KEY is not configured. Set it in your environment to enable chatting." },
-      { status: 500 }
+  const body = await req.json();
+  const messages: ChatMessage[] = Array.isArray(body?.messages) ? body.messages : [];
+  const persona = typeof body?.persona === "string" ? body.persona : "full-stack";
+  const temperature = typeof body?.temperature === "number" ? body.temperature : 0.6;
+  const draftSystemPrompt = typeof body?.systemPrompt === "string" ? body.systemPrompt : "";
+  const requestedModel = typeof body?.model === "string" ? body.model : DEFAULT_MODEL;
+
+  const personaPrompt = personas[persona] ?? personas["full-stack"];
+  const systemPrompt = [personaPrompt, draftSystemPrompt].filter(Boolean).join("\n\n");
+
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) {
+    console.error("Missing GROQ_API_KEY. Cannot fulfil chat request.");
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Server misconfiguration. Please set GROQ_API_KEY and try again."
+        }
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
     );
   }
 
-  const body = (await req.json()) as ChatRequestBody;
-  const messages = Array.isArray(body?.messages) ? body.messages : [];
-  const persona = typeof body?.persona === "string" ? body.persona : "full-stack";
-  const draftSystemPrompt = typeof body?.systemPrompt === "string" ? body.systemPrompt : "";
-  const personaPrompt = personas[persona] ?? personas["full-stack"];
-  const systemPrompt = [personaPrompt, draftSystemPrompt].filter(Boolean).join("\n\n");
-  const model = MODEL_MAP[body?.model ?? ""] ?? DEFAULT_MODEL;
-  const temperature = clamp(typeof body?.temperature === "number" ? body.temperature : 0.6, 0, 1);
+  const client = new Groq({ apiKey: groqApiKey });
 
-  const groqMessages = buildGroqMessages(messages, systemPrompt);
+  const formattedMessages = formatMessagesForProvider(messages, systemPrompt);
 
   try {
-    const completion = await groq.chat.completions.create({
-      model,
+    const completion = await client.chat.completions.create({
+      model: requestedModel,
       temperature,
-      messages: groqMessages
+      messages: formattedMessages,
+      stream: false
     });
 
-    const content = completion.choices?.[0]?.message?.content?.trim();
+    const choice = completion.choices?.[0];
+    const message = choice?.message;
+    const assistantContent = message?.content?.trim();
 
-    if (!content) {
-      throw new Error("Groq response did not include any content");
+    if (!assistantContent) {
+      console.error("Groq completion missing content", {
+        requestedModel,
+        choice,
+        usage: completion.usage
+      });
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: "The AI response was empty. Please try again."
+          }
+        }),
+        {
+          status: 502,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    const metadata: NonNullable<ChatMessage["metadata"]> = {
+      provider: "groq",
+      model: requestedModel,
+      finishReason: choice.finish_reason ?? "",
+      persona,
+      temperature
+    };
+
+    if (message?.reasoning) {
+      metadata.reasoning = JSON.stringify(message.reasoning);
     }
 
     const assistantMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
-      content,
+      content: assistantContent,
       createdAt: new Date().toISOString(),
       status: "complete",
-      metadata: {
-        model,
-        temperature
-      }
+      metadata
     };
 
-    return NextResponse.json({ message: assistantMessage });
+    return Response.json({ message: assistantMessage, usage: completion.usage });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Groq chat request failed", error);
+    const status = getErrorStatus(error);
+    const errorMessage = getErrorMessage(error);
 
-    return NextResponse.json({ error: message }, { status: 502 });
+    console.error("Groq chat completion failed", {
+      status,
+      requestedModel,
+      persona,
+      temperature,
+      messageCount: formattedMessages.length,
+      error
+    });
+
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Upstream AI provider request failed. Please try again shortly.",
+          details: errorMessage
+        }
+      }),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
   }
 }
 
-function buildGroqMessages(messages: ChatMessage[], systemPrompt: string) {
-  const sanitized = messages
-    .filter((message) => (message.role === "user" || message.role === "assistant") && Boolean(message.content?.trim()))
-    .map((message) => ({
-      role: message.role,
-      content: message.content
-    }));
+type ProviderMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+function formatMessagesForProvider(messages: ChatMessage[], systemPrompt: string): ProviderMessage[] {
+  const sanitizedHistory = messages.filter((message) => {
+    if (!message?.content?.trim()) {
+      return false;
+    }
+
+    if (message.role === "tool") {
+      return false;
+    }
+
+    return true;
+  });
+
+  const history = sanitizedHistory.map((message) => ({
+    role: mapRole(message.role),
+    content: message.content
+  }));
 
   if (systemPrompt) {
-    return [{ role: "system", content: systemPrompt }, ...sanitized];
+    return [{ role: "system", content: systemPrompt }, ...history];
   }
 
-  return sanitized;
+  return history;
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
+function mapRole(role: ChatMessage["role"]): ProviderMessage["role"] {
+  if (role === "assistant" || role === "user" || role === "system") {
+    return role;
+  }
+
+  return "assistant";
+}
+
+function getErrorStatus(error: unknown) {
+  if (typeof error === "object" && error !== null) {
+    const maybeNumber = (error as { status?: number }).status;
+    if (typeof maybeNumber === "number" && maybeNumber >= 400 && maybeNumber <= 599) {
+      return maybeNumber;
+    }
+  }
+
+  return 502;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Unknown error";
+    }
+  }
+
+  return typeof error === "string" ? error : "Unknown error";
 }
