@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+nse } from "next/server";
 import Groq from "groq-sdk";
 import type { ChatMessage } from "@/lib/chat/types";
 

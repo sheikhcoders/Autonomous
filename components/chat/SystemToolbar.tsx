@@ -11,7 +11,11 @@ interface SystemToolbarProps {
   onPersonaChange: (persona: string) => void;
 }
 
-const MODELS = ["gpt-4o-mini", "gpt-4.1", "claude-3.5", "llama-3.1"];
+const MODELS = [
+  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (versatile)" },
+  { value: "llama-3.1-70b-versatile", label: "Llama 3.1 70B (versatile)" },
+  { value: "llama-guard-3-8b", label: "Llama Guard 3 8B" }
+];
 const PERSONAS = [
   { value: "full-stack", label: "Full-stack engineer" },
   { value: "product-designer", label: "Product designer" },
@@ -53,8 +57,8 @@ export function SystemToolbar({
         Model
         <select value={settings.model} onChange={(event) => onSettingsChange({ model: event.target.value })}>
           {MODELS.map((model) => (
-            <option key={model} value={model}>
-              {model}
+            <option key={model.value} value={model.value}>
+              {model.label}
             </option>
           ))}
         </select>
