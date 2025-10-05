@@ -67,8 +67,9 @@ cp .env.example .env.local
 ## API contract
 
 The `/api/chat` route expects the same schema used by Vercel AI Elements: an array of `{ id, role, content }
-messages along with persona and temperature metadata. It returns a single assistant message by default, but
-is structured so you can replace the mocked implementation with your own streaming handler.
+messages along with persona and temperature metadata. It proxies the request to Groq's Chat Completions API
+via the Vercel AI SDK conventions and returns the assistant's reply. You can extend the route to stream
+responses or enrich the payload with tool calls if your use case requires it.
 
 ### Upstash Redis example route
 
@@ -123,7 +124,8 @@ curl "https://api.groq.com/openai/v1/chat/completions" \
 
 ## Customisation roadmap
 
-- Swap the mock implementation in `app/api/chat/route.ts` with your preferred inference provider.
+- Extend the Groq-backed implementation in `app/api/chat/route.ts` with streaming, tool execution, or
+  retrieval-augmented prompts.
 - Extend the `useChatManager` hook to call vector search, tool executors, or evaluation harnesses.
 - Replace the CSS tokens in `app/globals.css` with Tailwind or your design system of choice.
 
