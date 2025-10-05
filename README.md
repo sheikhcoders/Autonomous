@@ -62,6 +62,23 @@ is structured so you can replace the mocked implementation with your own streami
 - Extend the `useChatManager` hook to call vector search, tool executors, or evaluation harnesses.
 - Replace the CSS tokens in `app/globals.css` with Tailwind or your design system of choice.
 
+## Agent testing workflow
+
+To keep prompt and configuration changes grounded in measurable impact, adopt an iterative
+testing loop:
+
+1. **Define the target behaviour** by writing automated or scriptable test cases before you
+   touch prompts or code. Cover core user journeys, stress cases, and likely failure modes so
+   expectations are explicit.
+2. **Run the suite and inspect the failures** to identify the biggest behavioural gaps.
+   Triage failed scenarios by user or business impact to decide what to tackle first.
+3. **Tweak one lever at a time**—prompt copy, retrieval settings, safety guardrails—and record
+   each experiment so you know exactly which change drove the improvement.
+4. **Re-run the tests after every adjustment**. Iterate until the entire suite passes so you can
+   ship with confidence.
+5. **Integrate the suite into CI/CD when possible** to automatically catch regressions as the
+   agent evolves.
+
 ## License
 
 MIT
