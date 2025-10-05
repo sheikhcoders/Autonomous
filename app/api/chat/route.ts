@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import Groq from "groq-sdk";
 import type { ChatMessage } from "@/lib/chat/types";
 
 const personas: Record<string, string> = {
@@ -10,133 +11,187 @@ const personas: Record<string, string> = {
     "You are an AI researcher who summarises findings, compares techniques, and is explicit about assumptions."
 };
 
+const DEFAULT_MODEL = "deepseek-r1-distill-llama-70b";
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const messages: ChatMessage[] = body?.messages ?? [];
+  const messages: ChatMessage[] = Array.isArray(body?.messages) ? body.messages : [];
   const persona = typeof body?.persona === "string" ? body.persona : "full-stack";
   const temperature = typeof body?.temperature === "number" ? body.temperature : 0.6;
   const draftSystemPrompt = typeof body?.systemPrompt === "string" ? body.systemPrompt : "";
+  const requestedModel = typeof body?.model === "string" ? body.model : DEFAULT_MODEL;
 
   const personaPrompt = personas[persona] ?? personas["full-stack"];
   const systemPrompt = [personaPrompt, draftSystemPrompt].filter(Boolean).join("\n\n");
 
-  const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
-  const userContent = lastUserMessage?.content?.trim();
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) {
+    console.error("Missing GROQ_API_KEY. Cannot fulfil chat request.");
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Server misconfiguration. Please set GROQ_API_KEY and try again."
+        }
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  }
 
-  const replySections: string[] = [];
+  const client = new Groq({ apiKey: groqApiKey });
+
+  const formattedMessages = formatMessagesForProvider(messages, systemPrompt);
+
+  try {
+    const completion = await client.chat.completions.create({
+      model: requestedModel,
+      temperature,
+      messages: formattedMessages,
+      stream: false
+    });
+
+    const choice = completion.choices?.[0];
+    const message = choice?.message;
+    const assistantContent = message?.content?.trim();
+
+    if (!assistantContent) {
+      console.error("Groq completion missing content", {
+        requestedModel,
+        choice,
+        usage: completion.usage
+      });
+      return new Response(
+        JSON.stringify({
+          error: {
+            message: "The AI response was empty. Please try again."
+          }
+        }),
+        {
+          status: 502,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    const metadata: NonNullable<ChatMessage["metadata"]> = {
+      provider: "groq",
+      model: requestedModel,
+      finishReason: choice.finish_reason ?? "",
+      persona,
+      temperature
+    };
+
+    if (message?.reasoning) {
+      metadata.reasoning = JSON.stringify(message.reasoning);
+    }
+
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: assistantContent,
+      createdAt: new Date().toISOString(),
+      status: "complete",
+      metadata
+    };
+
+    return Response.json({ message: assistantMessage, usage: completion.usage });
+  } catch (error) {
+    const status = getErrorStatus(error);
+    const errorMessage = getErrorMessage(error);
+
+    console.error("Groq chat completion failed", {
+      status,
+      requestedModel,
+      persona,
+      temperature,
+      messageCount: formattedMessages.length,
+      error
+    });
+
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "Upstream AI provider request failed. Please try again shortly.",
+          details: errorMessage
+        }
+      }),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  }
+}
+
+type ProviderMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+function formatMessagesForProvider(messages: ChatMessage[], systemPrompt: string): ProviderMessage[] {
+  const sanitizedHistory = messages.filter((message) => {
+    if (!message?.content?.trim()) {
+      return false;
+    }
+
+    if (message.role === "tool") {
+      return false;
+    }
+
+    return true;
+  });
+
+  const history = sanitizedHistory.map((message) => ({
+    role: mapRole(message.role),
+    content: message.content
+  }));
 
   if (systemPrompt) {
-    replySections.push(
-      `Persona context (temperature ${temperature.toFixed(2)}): ${systemPrompt}`
-    );
+    return [{ role: "system", content: systemPrompt }, ...history];
   }
 
-  if (userContent) {
-    replySections.push(`You asked me to: ${userContent}`);
-  } else {
-    replySections.push(
-      "No user prompt was supplied. Ask me about product ideas, implementation plans, or debugging questions."
-    );
+  return history;
+}
+
+function mapRole(role: ChatMessage["role"]): ProviderMessage["role"] {
+  if (role === "assistant" || role === "user" || role === "system") {
+    return role;
   }
 
-  const conversationInsights = summariseConversation(messages);
-  if (conversationInsights) {
-    replySections.push(conversationInsights);
-  }
+  return "assistant";
+}
 
-  const suggestions = buildSuggestions(userContent);
-  if (suggestions.length > 0) {
-    replySections.push("Next steps:" + suggestions.map((item) => `\n• ${item}`).join(""));
-  }
-
-  const assistantMessage: ChatMessage = {
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content: replySections.join("\n\n"),
-    createdAt: new Date().toISOString(),
-    status: "complete"
-  };
-
-  return new Response(JSON.stringify({ message: assistantMessage }), {
-    headers: {
-      "Content-Type": "application/json"
+function getErrorStatus(error: unknown) {
+  if (typeof error === "object" && error !== null) {
+    const maybeNumber = (error as { status?: number }).status;
+    if (typeof maybeNumber === "number" && maybeNumber >= 400 && maybeNumber <= 599) {
+      return maybeNumber;
     }
-  });
+  }
+
+  return 502;
 }
 
-function summariseConversation(messages: ChatMessage[]) {
-  if (!messages.length) {
-    return "";
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
   }
 
-  const userTurns = messages.filter((message) => message.role === "user");
-  const assistantTurns = messages.filter((message) => message.role === "assistant");
-
-  const summaryParts: string[] = [];
-
-  if (userTurns.length > 0) {
-    summaryParts.push(
-      `User messages so far (${userTurns.length}): ${userTurns
-        .slice(-3)
-        .map((message) => truncate(message.content, 140))
-        .join(" | ")}`
-    );
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Unknown error";
+    }
   }
 
-  if (assistantTurns.length > 0) {
-    summaryParts.push(
-      `Assistant replies so far (${assistantTurns.length}): ${assistantTurns
-        .slice(-3)
-        .map((message) => truncate(message.content, 140))
-        .join(" | ")}`
-    );
-  }
-
-  return summaryParts.join("\n");
-}
-
-function buildSuggestions(userContent?: string) {
-  if (!userContent) {
-    return [
-      "Share a product requirement, API contract, or error trace you want help with.",
-      "Switch persona in the toolbar to explore different viewpoints.",
-      "Draft a follow-up question to dig deeper into your topic."
-    ];
-  }
-
-  const lowered = userContent.toLowerCase();
-
-  if (lowered.includes("plan") || lowered.includes("architecture")) {
-    return [
-      "List the critical components and responsibilities you expect to build.",
-      "Highlight any third-party APIs or services that will be involved.",
-      "Ask for edge cases or failure scenarios you might be missing."
-    ];
-  }
-
-  if (lowered.includes("debug") || lowered.includes("error")) {
-    return [
-      "Paste the relevant stack trace or console output so I can inspect it.",
-      "Describe what you expected to happen and what actually occurred.",
-      "Explain the environment (local, staging, production) where the bug appears."
-    ];
-  }
-
-  if (lowered.includes("copy") || lowered.includes("marketing")) {
-    return [
-      "Clarify the audience you are targeting with this message.",
-      "Share the tone or brand guidelines you need to follow.",
-      "Specify the channel (landing page, onboarding email, release notes, etc.)."
-    ];
-  }
-
-  return [
-    "Request code snippets or pseudo-code to move faster.",
-    "Ask for test cases or telemetry you can add to validate the idea.",
-    "Invite the assistant to suggest how AI building blocks can elevate the experience."
-  ];
-}
-
-function truncate(value: string, length: number) {
-  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
+  return typeof error === "string" ? error : "Unknown error";
 }
