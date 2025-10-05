@@ -227,21 +227,30 @@ export function useChatManager(): UseChatManagerResult {
         const payload = (await response.json()) as { message: ChatMessage };
         const assistantMessage = payload.message;
 
-        const mergedMessages = nextMessages.map((message) =>
-          message.id === assistantPlaceholder.id ? { ...assistantMessage, status: "complete" } : message
-        );
+        const mergedMessages = nextMessages.map((message): ChatMessage => {
+          if (message.id === assistantPlaceholder.id) {
+            const completedMessage: ChatMessage = {
+              ...assistantMessage,
+              status: "complete"
+            };
+            return completedMessage;
+          }
+          return message;
+        });
         pushMessages(conversationId, mergedMessages);
       } catch (error) {
         console.error("Chat request failed", error);
-        const erroredMessages = nextMessages.map((message) =>
-          message.id === assistantPlaceholder.id
-            ? {
-                ...message,
-                status: "error",
-                content: "Request failed. Try again."
-              }
-            : message
-        );
+        const erroredMessages = nextMessages.map((message): ChatMessage => {
+          if (message.id === assistantPlaceholder.id) {
+            const errorMessage: ChatMessage = {
+              ...message,
+              status: "error",
+              content: "Request failed. Try again."
+            };
+            return errorMessage;
+          }
+          return message;
+        });
         pushMessages(conversationId, erroredMessages);
       } finally {
         setIsSending(false);
@@ -293,21 +302,30 @@ export function useChatManager(): UseChatManagerResult {
         const payload = (await response.json()) as { message: ChatMessage };
         const assistantMessage = payload.message;
 
-        const mergedMessages = nextMessages.map((message) =>
-          message.id === updatedPlaceholder.id ? { ...assistantMessage, status: "complete" } : message
-        );
+        const mergedMessages = nextMessages.map((message): ChatMessage => {
+          if (message.id === updatedPlaceholder.id) {
+            const completedMessage: ChatMessage = {
+              ...assistantMessage,
+              status: "complete"
+            };
+            return completedMessage;
+          }
+          return message;
+        });
         pushMessages(conversationId, mergedMessages);
       } catch (error) {
         console.error("Failed to regenerate message", error);
-        const erroredMessages = nextMessages.map((message) =>
-          message.id === updatedPlaceholder.id
-            ? {
-                ...message,
-                status: "error",
-                content: "Regeneration failed. Try again."
-              }
-            : message
-        );
+        const erroredMessages = nextMessages.map((message): ChatMessage => {
+          if (message.id === updatedPlaceholder.id) {
+            const errorMessage: ChatMessage = {
+              ...message,
+              status: "error",
+              content: "Regeneration failed. Try again."
+            };
+            return errorMessage;
+          }
+          return message;
+        });
         pushMessages(conversationId, erroredMessages);
       } finally {
         setIsSending(false);
