@@ -21,6 +21,20 @@ npm run dev
 
 The development server runs on [http://localhost:3000](http://localhost:3000).
 
+### Environment variables
+
+Copy `.env.example` to `.env.local` and fill in your Upstash Redis and Groq credentials before running any API routes.
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+| --- | --- |
+| `UPSTASH_REDIS_REST_URL` | REST endpoint for your Upstash Redis database. |
+| `UPSTASH_REDIS_REST_TOKEN` | REST token for the Upstash Redis database. |
+| `GROQ_API_KEY` | API key used by the Groq SDK and streaming examples. |
+
 ## Project structure
 
 ```
@@ -55,6 +69,57 @@ The development server runs on [http://localhost:3000](http://localhost:3000).
 The `/api/chat` route expects the same schema used by Vercel AI Elements: an array of `{ id, role, content }
 messages along with persona and temperature metadata. It returns a single assistant message by default, but
 is structured so you can replace the mocked implementation with your own streaming handler.
+
+### Upstash Redis example route
+
+The App Router exposes `POST /api/upstash`, which demonstrates how to read data from Upstash Redis using the official SDK.
+
+```ts
+// app/api/upstash/route.ts
+import { Redis } from '@upstash/redis';
+import { NextResponse } from 'next/server';
+
+const redis = Redis.fromEnv();
+
+export async function POST() {
+  const result = await redis.get('item');
+  return NextResponse.json({ result });
+}
+```
+
+### Groq integration examples
+
+- `pages/api/groq-test.js` adds a Pages Router endpoint that exercises the Groq SDK's Chat Completions API.
+- `scripts/groq-stream.ts` shows how to stream text responses from Groq models via the `@ai-sdk/groq` provider.
+
+Run the streaming demo with your API key by executing the script via `ts-node` or `tsx`:
+
+```bash
+npx tsx scripts/groq-stream.ts
+```
+
+You can also make raw HTTP requests with cURL by swapping in your key and prompt:
+
+```bash
+curl "https://api.groq.com/openai/v1/chat/completions" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <GROQ_API_KEY>" \
+  -d '{
+        "messages": [
+          {
+            "role": "user",
+            "content": "Why is fast inference so important for AI applications?"
+          }
+        ],
+        "model": "qwen-qwq-32b",
+        "temperature": 0.6,
+        "max_completion_tokens": 32768,
+        "top_p": 0.95,
+        "stream": true,
+        "stop": null
+      }'
+```
 
 ## Customisation roadmap
 
