@@ -90,7 +90,7 @@ export async function POST() {
 ### Groq integration examples
 
 - `pages/api/groq-test.js` adds a Pages Router endpoint that exercises the Groq SDK's Chat Completions API.
-- `scripts/groq-stream.ts` shows how to stream text responses from Groq models via the `@ai-sdk/groq` provider.
+- `scripts/groq-stream.ts` shows how to stream text responses from Groq models via the official `groq-sdk`.
 
 Run the streaming demo with your API key by executing the script via `ts-node` or `tsx`:
 
