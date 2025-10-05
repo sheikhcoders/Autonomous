@@ -14,6 +14,9 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
+      if (isSending) {
+        return;
+      }
       const trimmed = value.trim();
       if (!trimmed) {
         return;
@@ -21,7 +24,7 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
       onSubmit(trimmed);
       setValue("");
     },
-    [onSubmit, value]
+    [isSending, onSubmit, value]
   );
 
   return (
@@ -30,7 +33,12 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
         <span>Shift+Enter for newline</span>
         <span>{value.length} characters</span>
       </div>
-      <form onSubmit={handleSubmit}>
+      {isSending ? (
+        <p role="status" aria-live="polite" className="chat-status">
+          Assistant is responding…
+        </p>
+      ) : null}
+      <form onSubmit={handleSubmit} aria-busy={isSending}>
         <textarea
           value={value}
           placeholder={placeholder}
@@ -38,6 +46,9 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
+              if (isSending) {
+                return;
+              }
               const trimmed = value.trim();
               if (trimmed) {
                 onSubmit(trimmed);
@@ -45,8 +56,9 @@ export function MessageComposer({ placeholder, isSending, onSubmit }: MessageCom
               }
             }
           }}
+          aria-disabled={isSending}
         />
-        <button type="submit" disabled={isSending}>
+        <button type="submit" disabled={isSending} aria-disabled={isSending}>
           {isSending ? "Sending" : "Send"}
         </button>
       </form>
